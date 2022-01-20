@@ -166,9 +166,11 @@ md"Let's try the operator to perform the forward reconstruction"
 
 # ╔═╡ 510323c8-79ab-4039-b891-4c3dd53119d2
 begin
-	#dcf_for_op = ones(Float64,size(dcf)) # if we don't want to perform the dcf (image is suppose to be reconstructed without)
-	
 	dcf_for_op = dcf
+	
+	# if we don't want to perform the dcf  uncomment the next line
+	#dcf_for_op = ones(Float64,size(dcf)) 
+	
 	E = E_op(sensOp,nufftOp,dcf_for_op)
 	# test forward op
 	
@@ -257,19 +259,19 @@ begin
 end
 
 # ╔═╡ bbda1a5b-a3f2-48ea-8360-db2fe5f999be
-begin
-	im_ref,i1 = cg_sense(vec(raw_vec[1]), E' * E + λ * I , E, imax = 30)
-	Plots.heatmap(abs.(reshape(im_ref,N,N)),color = :greys,aspect_ratio = 1)
-end
+im_ref,i1 = cg_sense(vec(raw_vec[1]), E' * E + λ * I , E, imax = 30)
+
+# ╔═╡ f0ab4df0-c8cd-44d2-8b71-f968df1db7ac
+	Plots.heatmap(abs.(reshape(im_ref,N,N)),color = :greys,aspect_ratio = 1,legend = :none , axis=nothing, lims=(1,300))
 
 # ╔═╡ bbb3a3c8-1e8a-47e0-b62a-8b81b48896ea
 md"### Try the reconstruction with operator E'* E + λ"
 
+# ╔═╡ b0d7f251-c640-4dcc-8423-0b5018df512b
+im2,i2 = cg_sense(vec(raw_vec[1]),E' * E + λ ,E, imax = 10)
+
 # ╔═╡ 54e2686d-721e-49a2-94b5-506b491016e7
-begin
-	im2,i2 = cg_sense(vec(raw_vec[1]),E' * E + λ ,E, imax = 10)
-	Plots.heatmap(abs.(reshape(im2,N,N)),color = :greys,aspect_ratio = 1)
-end
+Plots.heatmap(abs.(reshape(im2,N,N)),color = :greys,aspect_ratio = 1, legend = :none , axis=nothing, lims=(1,300))
 
 # ╔═╡ 4a36020e-5c83-45e2-9222-62229cf9ccfb
 md" **Issue with the second option...**"
@@ -281,7 +283,7 @@ md"# Reproducing brain figures with undersampling"
 md"Value of the tikhonov regularization : `E' * E + λ2 * I` -> λ2 = $(@bind λ2 NumberField(0e-2:1e1, default=0.10))"
 
 # ╔═╡ ba93b360-5fcc-48ee-a9fe-472b8b72b4d0
-md"Should I use the density compensation function (DCF) : $(@bind dcf_check CheckBox())"
+md"Should I use the density compensation function (DCF) : $(@bind dcf_check CheckBox(true))"
 
 # ╔═╡ 149dd416-1d70-4181-a789-a6d585b2dbe5
 function cg_sense_store(rawdata,Aop,Eop;imax = 30,image_ref = [])
@@ -337,7 +339,8 @@ end
 # ╔═╡ 34cf6de7-a98f-400f-9cbc-4f8ec9cd761d
 begin
 	im_cg = Vector{Vector{Vector{Float64}}}(undef,4)
-	δ₁ = Vector{Vector{Float64}}(undef,4)
+	im_oneCoil = Vector{Vector{ComplexF64}}(undef,4)
+	δ₁ = Vector{Vector{Float64}}(undef,4) 
 	Δ₁ = Vector{Vector{Float64}}(undef,4)
 	iter_f = Vector{Int64}(undef,4)
 
@@ -353,14 +356,16 @@ begin
 		
 		E_tmp = E_op(sensOp,nufftOp_tmp,dcf_tmp)	
 
+		im_oneCoil[k] = vec(nufftOp_tmp'*(dcf_tmp.*vec(raw_vec[k][:,1])))
+		
 		if (k == 1)
-			im_ref = []
+			im_ref_one = []
 		else
-			im_ref = im_cg[1][iter_f[1]]
+			im_ref_one = im_cg[1][iter_f[1]]
 		end
 		
-	im_cg[k], iter_f[k], δ₁[k] , Δ₁[k]  = cg_sense_store(raw_vec[k], (E_tmp' * E_tmp) + λ2 * I , E_tmp, imax = 10, image_ref = im_ref)
-		
+	im_cg[k], iter_f[k], δ₁[k] , Δ₁[k]  = cg_sense_store(raw_vec[k], (E_tmp' * E_tmp) + λ2 * I , E_tmp, imax = 10, image_ref = im_ref_one)
+
 	end
 end
 
@@ -382,26 +387,49 @@ for i = 1:4
 	#Plots.plot!(p,plot1,plot2)
 	#Plots.plot(plot1,plot2,layout = (1,2))
 end
-	Plots.plot(p,p2,layout = (1,2))
+	p_2 = Plots.plot(p,p2,layout = (1,2),plot_title = "CG-sense reconstruction λ = $λ2 + density compasation : $dcf_check ",titlefontsize = 10)
 end
 
 
 # ╔═╡ 8270542b-068f-43b2-9889-f08b2dfc9ab3
-Plots.savefig("error_lambda_$λ2 dcf_$dcf_check.png")
+Plots.savefig(p_2,"output_figure/Fig4_lambda_$λ2 dcf_$dcf_check.png")
 
 # ╔═╡ 26a3efcb-d48e-418c-bb03-1b0e55ad0eb5
 begin
 	plot_array = Any[]
 for i = 1:4
-	
-	plotIm = Plots.heatmap(abs.(reshape(im_cg[i][iter_f[i]],N,N)),color = :greys,aspect_ratio = 1,title="R = $i",legend = :none , axis=nothing)
+			plotIm = Plots.heatmap(abs.(reshape(im_oneCoil[i],N,N)),color = :greys,aspect_ratio = 1,legend = :none , axis=nothing, lims=(1,300))
 	push!(plot_array,plotIm)
+	
+			plotIm = Plots.heatmap(abs.(reshape(im_cg[i][2],N,N)),color = :greys,aspect_ratio = 1,legend = :none , axis=nothing, lims=(1,300))
+	push!(plot_array,plotIm)
+	
+	plotIm = Plots.heatmap(abs.(reshape(im_cg[i][iter_f[i]],N,N)),color = :greys,aspect_ratio = 1,legend = :none , axis=nothing, lims=(1,300))
+	push!(plot_array,plotIm)
+
 end
-	p_1 = Plots.heatmap(plot_array...,layout = (2,2))
+	p_1 = Plots.heatmap(plot_array...,layout = (4,3), plot_title="CG-sense reconstruction 10 iterations + λ = $λ2 + density compasation : $dcf_check ",titlefontsize = 10)
+
+	# details
+	plot!(size=(1000,1000))
+	p_1.subplots[1].attr[:title] = "Single coil"
+	p_1.subplots[2].attr[:title] = "Initial"
+	p_1.subplots[3].attr[:title] = "Final"
+
+
+	plot!(subplot=1, ylabel="R = 1",yguidefontrotation=-90)
+	plot!(subplot=4, ylabel="R = 2",yguidefontrotation=-90)
+	plot!(subplot=7, ylabel="R = 3", yguidefontrotation=-90)
+	plot!(subplot=10, ylabel="R = 4",yguidefontrotation=-90)
+
+	p_1.attr[:plot_titlefontsize]=10
+	p_1.attr[:plot_title]="CG-sense reconstruction 10 iterations + λ = $λ2 + density compasation : $dcf_check "
+	p_1
+	
 end
 
 # ╔═╡ 83e55893-6f25-4e40-9c63-c0ea24359374
-Plots.savefig("Fig4_lambda_$λ2 dcf_$dcf_check.png")
+Plots.savefig(p_1,"output_figure/Fig5_lambda_$λ2 dcf_$dcf_check.png")
 
 # ╔═╡ ef1db0e0-9c29-41ea-a14f-6cdb035184af
 md"# Conlusion
@@ -2170,7 +2198,9 @@ version = "0.9.1+5"
 # ╟─c390edf9-eab5-4c41-9978-53bd319d1127
 # ╠═c742228b-192f-46d2-a94c-82df3b544cd5
 # ╠═bbda1a5b-a3f2-48ea-8360-db2fe5f999be
+# ╠═f0ab4df0-c8cd-44d2-8b71-f968df1db7ac
 # ╟─bbb3a3c8-1e8a-47e0-b62a-8b81b48896ea
+# ╠═b0d7f251-c640-4dcc-8423-0b5018df512b
 # ╠═54e2686d-721e-49a2-94b5-506b491016e7
 # ╟─4a36020e-5c83-45e2-9222-62229cf9ccfb
 # ╟─7f61ebed-ea54-4ca9-801e-b2177e0f9e2c
