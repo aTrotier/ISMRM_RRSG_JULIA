@@ -1,4 +1,5 @@
 # ISMRM 2019 Reproducible research study group challenge
+HTML pages : https://atrotier.github.io/ISMRM_RRSG_JULIA/Julia_CG-sense.html generated with the [static-export-template workflow for Pluto](https://github.com/JuliaPluto/static-export-template)
 
 ### Description
 
